@@ -27,6 +27,46 @@ function SSIM() {
       });
   };
 
+  self.generateDifference = function(image1, image2, outputFileName, callback) {
+    var difference  = new Buffer(image1.width * image1.height * image1.channels);
+
+    var offset = 0;
+    for(var y = 0; y < image1.height; y++) {
+      for(var x = 0; x < image1.width; x++) {
+        var red1 = image1.data[offset];
+        var green1 = image1.data[offset + 1];
+        var blue1 = image1.data[offset + 2];
+        var alpha1 = image1.data[offset + 3];
+
+        var red2 = image2.data[offset];
+        var green2 = image2.data[offset + 1];
+        var blue2 = image2.data[offset + 2];
+        var alpha2 = image2.data[offset + 3];
+
+        if (red1 !== red2 || green1 !== green2 || blue1 !== blue2) {
+          difference[offset] = 255;
+          difference[offset + 1] = 0;
+          difference[offset + 2] = 0;
+          difference[offset + 3] = 255;
+        } else {
+          difference[offset] = red1;
+          difference[offset + 1] = green1;
+          difference[offset + 2] = blue1;
+          difference[offset + 3] = 100;
+        }
+        offset += 4;
+      }
+    }
+    var png = new PNG();
+    png.width = image1.width;
+    png.height = image1.height;
+    png.data = difference;
+
+    png.pack().pipe(fs.createWriteStream(outputFileName)).on('close', function() {
+      callback(difference);
+    });
+  }
+
   self.compare = function(image1, image2, windowSize, K1, K2, luminance, bitsPerComponent) {
     if (windowSize === void 0) { windowSize = 8; }
     if (K1 === void 0) { K1 = 0.01; }
@@ -36,6 +76,7 @@ function SSIM() {
     if (image1.width !== image2.width || image1.height !== image2.height) {
       return 0; // Not similar
     }
+
     /* tslint:disable:no-bitwise */
     var L = (1 << bitsPerComponent) - 1;
     /* tslint:enable:no-bitwise */
@@ -136,11 +177,16 @@ function SSIM() {
     return sumLuma / lumaValues.length;
   }
 
-  self.ssim = function(imageFileA, imageFileB, callback) {
+  self.calculateSSIM = function(imageFileA, imageFileB, outputFileName, callback) {
     self.loadImage(imageFileA, function(imageA) {
-      console.log(imageA);
       self.loadImage(imageFileB, function(imageB) {
-        callback(self.compare(imageA, imageB));
+        if (outputFileName) {
+          self.generateDifference(imageA, imageB, outputFileName, function() {
+            callback(self.compare(imageA, imageB));
+          });
+        } else {
+          callback(self.compare(imageA, imageB));
+        }
       });
     });
   };
