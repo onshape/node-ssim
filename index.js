@@ -190,13 +190,35 @@ function SSIM() {
       meanSquareError[t] = squareError[t] / totalPixels;
     }
 
+    // Calculate the standard deviation for mean channel differences (excluding alpha)
+    var channelMean = 0;
+    var channelMeanCount = 0;
+    var variance = 0;
+    var varianceCount = 0;
+    var standardDeviation = 0;
+
+    for(var m = 0; m < channels && m < 3; m++) {
+      channelMean += meanSquareError[m];
+      channelMeanCount++;
+    }
+    channelMean /= channelMeanCount;
+
+    for(var v = 0 ; v < channels && v < 3; v++) {
+      variance += Math.pow(meanSquareError[v] - channelMean, 2);
+      varianceCount++;
+    }
+    variance /= (varianceCount - 1);
+    standardDeviation = Math.sqrt(variance);
+
+    // Package result
     var result = {
       ae: absoluteError,
       mae: meanAbsoluteError,
       se: squareError,
       mse: meanSquareError,
       cd: differentPixels,
-      mcd: differentPixels / totalPixels
+      mcd: differentPixels / totalPixels,
+      mcsd: standardDeviation
     };
 
     if (options.outputFileName) { // output the differnce image
@@ -259,7 +281,8 @@ function SSIM() {
             squareErrors: difference.se,
             meanSquareErrors: difference.mse,
             channelDistortion: difference.cd,
-            meanChannelDistortion: difference.mcd
+            meanChannelDistortion: difference.mcd,
+            meanChannelStandardDeviation: difference.mcsd
           };
           callback(totalDifferences);
         });
