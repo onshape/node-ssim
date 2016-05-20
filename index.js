@@ -267,26 +267,58 @@ function SSIM() {
     return result;
   };
 
-  // Compare two images with options and result calculated differences
+  /**
+   * @typedef {{
+   *    windowSize: string|undefined
+   *    K1: number|undefined
+   *    K2: number|undefined
+   *    useLuminance: boolean|undefined
+   *    bitsPerComponent: number|undefined
+   * }}
+   */
+  var SSIMOptions;
+
+  /**
+   * Compare two images with options and result calculated differences
+   * @param {string} imageFileA : name of the baseline image file
+   * @param {string} imageFileB : name of the comparison image file
+   * @param {SSIMOptions|undefined} options
+   * @param callback
+   */
   self.compare = function(imageFileA, imageFileB, options, callback) {
-    self.loadImageFromFile(imageFileA, function(imageA) {
-      self.loadImageFromFile(imageFileB, function(imageB) {
-        self.calculateChannelDifferences(imageA, imageB, options, function(difference) {
-          var ssim = self.calculateSsim(imageA, imageB);
-          var totalDifferences = {
-            structuralSimilarityIndex: ssim.ssim,
-            meanCosineSimilarity: ssim.mcs,
-            meanAbsoluteErrors: difference.mae,
-            absoluteErrors: difference.ae,
-            squareErrors: difference.se,
-            meanSquareErrors: difference.mse,
-            channelDistortion: difference.cd,
-            meanChannelDistortion: difference.mcd,
-            meanChannelStandardDeviation: difference.mcsd
-          };
-          callback(totalDifferences);
+    try {
+      self.loadImageFromFile(imageFileA, function(imageA) {
+        self.loadImageFromFile(imageFileB, function(imageB) {
+          self.compareData(imageA, imageB, options, callback);
         });
       });
+    } catch (error) {
+      callback(error);
+    }
+  };
+
+  /**
+   * Compare two image strings with options and result calculated differences
+   * @param {string} imageA : baseline image
+   * @param {string} imageB : compare image
+   * @param {SSIMOptions|undefined} options
+   * @param callback
+   */
+  self.compareData = function(imageA, imageB, options, callback) {
+    self.calculateChannelDifferences(imageA, imageB, options, function(difference) {
+      var ssim = self.calculateSsim(imageA, imageB);
+      var totalDifferences = {
+        structuralSimilarityIndex: ssim.ssim,
+        meanCosineSimilarity: ssim.mcs,
+        meanAbsoluteErrors: difference.mae,
+        absoluteErrors: difference.ae,
+        squareErrors: difference.se,
+        meanSquareErrors: difference.mse,
+        channelDistortion: difference.cd,
+        meanChannelDistortion: difference.mcd,
+        meanChannelStandardDeviation: difference.mcsd
+      };
+      callback(null, totalDifferences);
     });
   };
 };
