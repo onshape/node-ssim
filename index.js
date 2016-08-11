@@ -130,9 +130,9 @@ function SSIM() {
   self.calculateChannelDifferences = function(image1, image2, options, callback) {
     var fuzz = (options.fuzz !== undefined) ? options.fuzz : 32;
 
-    var totalSize = image1.height * image1.width * 4;
+    var channels = image1.channels || 4;
+    var totalSize = image1.height * image1.width * channels;
     var totalPixels = image1.height * image1.width;
-    var channels = image1.channels;
 
     var differenceImage = (options.outputFileName && channels === 4) ? new Buffer(totalSize) : null;
 
@@ -169,7 +169,7 @@ function SSIM() {
       }
 
       if(options.outputFileName && channels === 4) {
-        // SHow pixel differnces
+        // Show pixel differnces
         if (match) {
           differenceImage[offset] = image1.data[offset];
           differenceImage[offset + 1] = image1.data[offset + 1];
@@ -305,6 +305,13 @@ function SSIM() {
    * @param callback
    */
   self.compareData = function(imageA, imageB, options, callback) {
+    if (typeof imageA === 'string') {
+      imageA = new PNG.sync.read(new Buffer(imageA, 'base64'));
+    }
+    if (typeof imageB === 'string') {
+      imageB = new PNG.sync.read(new Buffer(imageB, 'base64'));
+    }
+
     self.calculateChannelDifferences(imageA, imageB, options, function(difference) {
       var ssim = self.calculateSsim(imageA, imageB);
       var totalDifferences = {
