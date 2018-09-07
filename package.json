@@ -1,5 +1,5 @@
 {
-  "name": "node-ssim",
+  "name": "@onshape/node-ssim",
   "version": "0.0.5",
   "description": "Structural Similarity Image Comparison",
   "main": "index.js",
