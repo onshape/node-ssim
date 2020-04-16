@@ -17,6 +17,6 @@
   },
   "homepage": "https://github.com/mdbarr/node-ssim",
   "dependencies": {
-    "pngjs": "^2.2.0"
+    "pngjs": "^5.0.0"
   }
 }
