@@ -1,6 +1,6 @@
 {
   "name": "@onshape/node-ssim",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Structural Similarity Image Comparison",
   "main": "index.js",
   "scripts": {
@@ -8,14 +8,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/mdbarr/node-ssim.git"
+    "url": "https://github.com/onshape/node-ssim.git"
   },
-  "author": "",
+  "author": "Onshape Inc.",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/mdbarr/node-ssim/issues"
+    "url": "https://github.com/onshape/node-ssim/issues"
   },
-  "homepage": "https://github.com/mdbarr/node-ssim",
+  "homepage": "https://github.com/onshape/node-ssim",
   "dependencies": {
     "pngjs": "^5.0.0"
   }
