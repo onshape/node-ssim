@@ -3,159 +3,165 @@
 const fs = require('fs');
 const PNG = require('pngjs').PNG;
 
-function SSIM() {
-  let self = this;
+function ssimIterator(image1, image2, options, ssimValues) {
+  const width = image1.width;
+  const height = image1.height;
 
-  ////////////////////////////////////////////////////////////
+  for (let y = 0; y < height; y += options.windowSize) {
+    for (let x = 0; x < width; x += options.windowSize) {
+      const windowWidth = Math.min(options.windowSize, width - x);
+      const windowHeight = Math.min(options.windowSize, height - y);
 
-  function ssimIterator(image1, image2, options, ssimValues) {
-    let width = image1.width;
-    let height = image1.height;
+      const lumaValues1 = calculateLumaValuesForWindow(image1, x, y, windowWidth, windowHeight, options.useLuminance);
+      const lumaValues2 = calculateLumaValuesForWindow(image2, x, y, windowWidth, windowHeight, options.useLuminance);
 
-    for (let y = 0; y < height; y += options.windowSize) {
-      for (let x = 0; x < width; x += options.windowSize) {
-        let windowWidth = Math.min(options.windowSize, width - x);
-        let windowHeight = Math.min(options.windowSize, height - y);
+      const averageLuma1 = calculateAverageLuminance(lumaValues1);
+      const averageLuma2 = calculateAverageLuminance(lumaValues2);
 
-        let lumaValues1 = calculateLumaValuesForWindow(image1, x, y, windowWidth, windowHeight, options.useLuminance);
-        let lumaValues2 = calculateLumaValuesForWindow(image2, x, y, windowWidth, windowHeight, options.useLuminance);
+      ssimIteration(lumaValues1, lumaValues2, averageLuma1, averageLuma2, ssimValues);
+    }
+  }
+}
 
-        let averageLuma1 = calculateAverageLuminance(lumaValues1);
-        let averageLuma2 = calculateAverageLuminance(lumaValues2);
+function ssimIteration(lumaValues1, lumaValues2, averageLumaValue1, averageLumaValue2, ssimValues) {
+  // Calculate variance and covariance
+  let sigxy;
+  let sigsqx;
+  let sigsqy;
+  sigxy = sigsqx = sigsqy = 0.0;
 
-        ssimIteration(lumaValues1, lumaValues2, averageLuma1, averageLuma2, ssimValues);
+  for (let i = 0; i < lumaValues1.length; i++) {
+    sigsqx += Math.pow((lumaValues1[i] - averageLumaValue1), 2);
+    sigsqy += Math.pow((lumaValues2[i] - averageLumaValue2), 2);
+    sigxy += (lumaValues1[i] - averageLumaValue1) * (lumaValues2[i] - averageLumaValue2);
+  }
+
+  const numPixelsInWin = lumaValues1.length - 1;
+
+  sigsqx /= numPixelsInWin;
+  sigsqy /= numPixelsInWin;
+  sigxy /= numPixelsInWin;
+
+  // Perform ssim calculation on window
+  const numerator = (2 * averageLumaValue1 * averageLumaValue2 + ssimValues.c1) *
+      (2 * sigxy + ssimValues.c2);
+  const denominator = (Math.pow(averageLumaValue1, 2) + Math.pow(averageLumaValue2, 2) +
+                     ssimValues.c1) * (sigsqx + sigsqy + ssimValues.c2);
+
+  ssimValues.mssim += numerator / denominator;
+  ssimValues.mcs += (2 * sigxy + ssimValues.c2) / (sigsqx + sigsqy + ssimValues.c2);
+  ssimValues.numWindows++;
+}
+
+function calculateLumaValuesForWindow(image, x, y, width, height, luminance) {
+  const array = image.data;
+  const lumaValues = new Float32Array(new ArrayBuffer(width * height * 4));
+  let counter = 0;
+  const maxj = y + height;
+
+  for (let j = y; j < maxj; j++) {
+    const offset = j * image.width;
+    let i = (offset + x) * image.channels;
+    const maxi = (offset + x + width) * image.channels;
+
+    switch (image.channels) {
+    case 1: /* Grey */
+      while (i < maxi) {
+        // (0.212655 +  0.715158 + 0.072187) === 1
+        lumaValues[counter++] = array[i++];
       }
-    }
-  }
-
-  function ssimIteration(lumaValues1, lumaValues2, averageLumaValue1, averageLumaValue2, ssimValues) {
-    // Calculate variance and covariance
-    let sigxy, sigsqx, sigsqy;
-    sigxy = sigsqx = sigsqy = 0.0;
-
-    for (let i = 0; i < lumaValues1.length; i++) {
-      sigsqx += Math.pow((lumaValues1[i] - averageLumaValue1), 2);
-      sigsqy += Math.pow((lumaValues2[i] - averageLumaValue2), 2);
-      sigxy += (lumaValues1[i] - averageLumaValue1) * (lumaValues2[i] - averageLumaValue2);
-    }
-
-    let numPixelsInWin = lumaValues1.length - 1;
-
-    sigsqx /= numPixelsInWin;
-    sigsqy /= numPixelsInWin;
-    sigxy /= numPixelsInWin;
-
-    // Perform ssim calculation on window
-    let numerator = (2 * averageLumaValue1 * averageLumaValue2 + ssimValues.c1) *
-        (2 * sigxy + ssimValues.c2);
-    let denominator = (Math.pow(averageLumaValue1, 2) + Math.pow(averageLumaValue2, 2) +
-                       ssimValues.c1) * (sigsqx + sigsqy + ssimValues.c2);
-
-    ssimValues.mssim += numerator / denominator;
-    ssimValues.mcs += (2 * sigxy + ssimValues.c2) / (sigsqx + sigsqy + ssimValues.c2);
-    ssimValues.numWindows++;
-  }
-
-  function calculateLumaValuesForWindow(image, x, y, width, height, luminance) {
-    let array = image.data;
-    let lumaValues = new Float32Array(new ArrayBuffer(width * height * 4));
-    let counter = 0;
-    let maxj = y + height;
-
-    for (let j = y; j < maxj; j++) {
-      let offset = j * image.width;
-      let i = (offset + x) * image.channels;
-      let maxi = (offset + x + width) * image.channels;
-
-      switch (image.channels) {
-      case 1: /* Grey */
-        while (i < maxi) {
-          // (0.212655 +  0.715158 + 0.072187) === 1
-          lumaValues[counter++] = array[i++];
-        }
-        break;
-      case 2: /* GreyAlpha */
-        while (i < maxi) {
-          lumaValues[counter++] = array[i++] * (array[i++] / 255);
-        }
-        break;
-      case 3: /* RGB */
-        if (luminance) {
-          while (i < maxi) {
-            lumaValues[counter++] = (array[i++] * 0.212655 + array[i++] * 0.715158 + array[i++] * 0.072187);
-          }
-        } else {
-          while (i < maxi) {
-            lumaValues[counter++] = (array[i++] + array[i++] + array[i++]);
-          }
-        }
-        break;
-      case 4: /* RGBAlpha */
-        if (luminance) {
-          while (i < maxi) {
-            lumaValues[counter++] = (array[i++] * 0.212655 + array[i++] * 0.715158 + array[i++] * 0.072187) * (array[i++] / 255);
-          }
-        } else {
-          while (i < maxi) {
-            lumaValues[counter++] = (array[i++] + array[i++] + array[i++]) * (array[i++] / 255);
-          }
-        }
-        break;
+      break;
+    case 2: /* GreyAlpha */
+      while (i < maxi) {
+        lumaValues[counter++] = array[i++] * (array[i++] / 255);
       }
+      break;
+    case 3: /* RGB */
+      if (luminance) {
+        while (i < maxi) {
+          lumaValues[counter++] = (array[i++] * 0.212655 + array[i++] * 0.715158 + array[i++] * 0.072187);
+        }
+      } else {
+        while (i < maxi) {
+          lumaValues[counter++] = (array[i++] + array[i++] + array[i++]);
+        }
+      }
+      break;
+    case 4: /* RGBAlpha */
+      if (luminance) {
+        while (i < maxi) {
+          lumaValues[counter++] = (array[i++] * 0.212655 + array[i++] * 0.715158 + array[i++] * 0.072187) * (array[i++] / 255);
+        }
+      } else {
+        while (i < maxi) {
+          lumaValues[counter++] = (array[i++] + array[i++] + array[i++]) * (array[i++] / 255);
+        }
+      }
+      break;
     }
-    return lumaValues;
+  }
+  return lumaValues;
+}
+
+function calculateAverageLuminance(lumaValues) {
+  return lumaValues.reduce((accumulator, current) => accumulator + current, 0) / lumaValues.length;
+}
+
+class SSIM {
+  constructor(SSIMOptions = {}) {
+    /**
+     * @typedef {{
+     *    windowSize: string|undefined
+     *    K1: number|undefined
+     *    K2: number|undefined
+     *    useLuminance: boolean|undefined
+     *    bitsPerComponent: number|undefined
+     * }}
+     */
+    this.SSIMOptions = SSIMOptions;
   }
 
-  function calculateAverageLuminance(lumaValues) {
-    let sumLuma = 0.0;
-    for (let i = 0; i < lumaValues.length; i++) {
-      sumLuma += lumaValues[i];
-    }
-    return sumLuma / lumaValues.length;
-  }
-
-  ////////////////////////////////////////////////////////////
-
-  self.loadImageFromFile = function(fileName, callback) {
-    fs.createReadStream(fileName).pipe(new PNG()).on('parsed', function () {
-      callback({
-        data: this.data,
-        width: this.width,
-        height: this.height,
-        channels: 4
-      });
+  async getImageDataFromFile (fileName) {
+    return new Promise ((resolve, reject) => {
+      fs.createReadStream(fileName)
+        .pipe(new PNG())
+        .on('parsed', function() {
+          if (this.error) {
+            reject(this.error);
+          } else {
+            resolve({
+              data: this.data,
+              width: this.width,
+              height: this.height,
+              channels: 4
+            });
+          }
+        });
     });
-  };
+  }
 
-  self.calculateChannelDifferences = function(image1, image2, options, callback) {
-    let fuzz = (options.fuzz !== undefined) ? options.fuzz : 32;
+  calculateChannelDifferences (image1, image2, options) {
+    const fuzz = options.fuzz || 32;
 
-    let channels = image1.channels || 4;
-    let totalSize = image1.height * image1.width * channels;
-    let totalPixels = image1.height * image1.width;
+    const channels = image1.channels || 4;
+    const totalSize = image1.height * image1.width * channels;
+    const totalPixels = image1.height * image1.width;
 
-    let differenceImage = (options.outputFileName && channels === 4) ? Buffer.alloc(totalSize) : null;
+    const differenceImage = (options.outputFileName && channels === 4) ? Buffer.alloc(totalSize) : null;
 
-    let absoluteError = [];
-    let squareError = [];
-    let meanAbsoluteError = [];
-    let meanSquareError = [];
+    const absoluteError = new Array(channels).fill(0);
+    const squareError = new Array(channels).fill(0);
+    const meanAbsoluteError = new Array(channels).fill(0);
+    const meanSquareError = new Array(channels).fill(0);
     let differentPixels = 0;
 
-    for (let c = 0; c < channels; c++) {
-      absoluteError[c] = 0;
-      squareError[c] = 0;
-      meanAbsoluteError[c] = 0;
-      meanSquareError[c] = 0;
-    }
-
-    for(let offset = 0; offset < totalSize; offset += channels) {
-      let distances = [ ];
+    for (let offset = 0; offset < totalSize; offset += channels) {
+      const distances = [ ];
       let match = true;
 
       // Calculate per channel differences
       for (let d = 0; d < channels; d++) {
-        let pixelDistance = Math.abs(image2.data[offset + d] - image1.data[offset + d]);
+        const pixelDistance = Math.abs(image2.data[offset + d] - image1.data[offset + d]);
         distances.push(pixelDistance);
         if (pixelDistance > fuzz) {
           match = false;
@@ -168,7 +174,7 @@ function SSIM() {
         differentPixels++;
       }
 
-      if(options.outputFileName && channels === 4) {
+      if (options.outputFileName && channels === 4) {
         // Show pixel differnces
         if (match) {
           differenceImage[offset] = image1.data[offset];
@@ -185,7 +191,7 @@ function SSIM() {
     }
 
     // Calculate mean errors
-    for(let t = 0; t < channels; t++) {
+    for (let t = 0; t < channels; t++) {
       meanAbsoluteError[t] = absoluteError[t] / totalPixels;
       meanSquareError[t] = squareError[t] / totalPixels;
     }
@@ -197,13 +203,13 @@ function SSIM() {
     let varianceCount = 0;
     let standardDeviation = 0;
 
-    for(let m = 0; m < channels && m < 3; m++) {
+    for (let m = 0; m < channels && m < 3; m++) {
       channelMean += meanSquareError[m];
       channelMeanCount++;
     }
     channelMean /= channelMeanCount;
 
-    for(let v = 0 ; v < channels && v < 3; v++) {
+    for (let v = 0 ; v < channels && v < 3; v++) {
       variance += Math.pow(meanSquareError[v] - channelMean, 2);
       varianceCount++;
     }
@@ -211,7 +217,7 @@ function SSIM() {
     standardDeviation = Math.sqrt(variance);
 
     // Package result
-    let result = {
+    const result = {
       ae: absoluteError,
       mae: meanAbsoluteError,
       se: squareError,
@@ -222,20 +228,17 @@ function SSIM() {
     };
 
     if (options.outputFileName) { // output the differnce image
-      let png = new PNG();
+      const png = new PNG();
       png.width = image1.width;
       png.height = image1.height;
       png.data = differenceImage;
 
-      png.pack().pipe(fs.createWriteStream(options.outputFileName)).on('close', function() {
-        callback(result);
-      });
-    } else {
-      callback(result);
+      png.pack().pipe(fs.createWriteStream(options.outputFileName));
     }
-  };
+    return result;
+  }
 
-  self.calculateSsim = function(image1, image2, options) {
+  calculateSsim (image1, image2, options) {
     options = options || {};
 
     options.windowSize = options.windowSize || 64; // default 8 x 8 window size
@@ -244,14 +247,14 @@ function SSIM() {
     options.useLuminance = (options.useLuminance !== undefined) ? options.useLuminance : true;
     options.bitsPerComponent = options.bitsPerComponent || 8;
 
-    let result = { ssim: 0, mcs: 0 };
+    const result = { ssim: 0, mcs: 0 };
 
     if (image1.width !== image2.width || image1.height !== image2.height) {
       return result;
     }
 
-    let L = (1 << options.bitsPerComponent) - 1;
-    let ssimValues = {
+    const L = (1 << options.bitsPerComponent) - 1;
+    const ssimValues = {
       c1: Math.pow((options.K1 * L), 2),
       c2: Math.pow((options.K2 * L), 2),
       numWindows: 0,
@@ -265,18 +268,7 @@ function SSIM() {
     result.ssim = ssimValues.mssim / ssimValues.numWindows;
     result.mcs = ssimValues.mcs / ssimValues.numWindows;
     return result;
-  };
-
-  /**
-   * @typedef {{
-   *    windowSize: string|undefined
-   *    K1: number|undefined
-   *    K2: number|undefined
-   *    useLuminance: boolean|undefined
-   *    bitsPerComponent: number|undefined
-   * }}
-   */
-  let SSIMOptions;
+  }
 
   /**
    * Compare two images with options and result calculated differences
@@ -285,26 +277,23 @@ function SSIM() {
    * @param {SSIMOptions|undefined} options
    * @param callback
    */
-  self.compare = function(imageFileA, imageFileB, options, callback) {
-    try {
-      self.loadImageFromFile(imageFileA, function(imageA) {
-        self.loadImageFromFile(imageFileB, function(imageB) {
-          self.compareData(imageA, imageB, options, callback);
-        });
-      });
-    } catch (error) {
-      callback(error);
+  async compare (imageFileA, imageFileB, options, callback) {
+    const imageA = this.getImageDataFromFile(imageFileA);
+    const imageB = this.getImageDataFromFile(imageFileB);
+    if (callback && {}.toString.call(callback) === '[object Function]') {
+      callback(null, this.compareData(await imageA, await imageB, options));
+    } else {
+      return this.compareData(await imageA, await imageB, options);
     }
-  };
+  }
 
   /**
-   * Compare two image strings with options and result calculated differences
+   * Return comparison data of two images already converted
    * @param {string} imageA : baseline image
    * @param {string} imageB : compare image
    * @param {SSIMOptions|undefined} options
-   * @param callback
    */
-  self.compareData = function(imageA, imageB, options, callback) {
+  compareData (imageA, imageB, options) {
     if (typeof imageA === 'string') {
       imageA = new PNG.sync.read(Buffer.from(imageA, 'base64'));
     }
@@ -312,23 +301,22 @@ function SSIM() {
       imageB = new PNG.sync.read(Buffer.from(imageB, 'base64'));
     }
 
-    self.calculateChannelDifferences(imageA, imageB, options, function(difference) {
-      let ssim = self.calculateSsim(imageA, imageB);
-      let totalDifferences = {
-        structuralSimilarityIndex: ssim.ssim,
-        meanCosineSimilarity: ssim.mcs,
-        meanAbsoluteErrors: difference.mae,
-        absoluteErrors: difference.ae,
-        squareErrors: difference.se,
-        meanSquareErrors: difference.mse,
-        channelDistortion: difference.cd,
-        meanChannelDistortion: difference.mcd,
-        meanChannelStandardDeviation: difference.mcsd
-      };
-      callback(null, totalDifferences);
-    });
-  };
-};
+    const difference = this.calculateChannelDifferences(imageA, imageB, options);
+    const ssim = this.calculateSsim(imageA, imageB);
+    const totalDifferences = {
+      structuralSimilarityIndex: ssim.ssim,
+      meanCosineSimilarity: ssim.mcs,
+      meanAbsoluteErrors: difference.mae,
+      absoluteErrors: difference.ae,
+      squareErrors: difference.se,
+      meanSquareErrors: difference.mse,
+      channelDistortion: difference.cd,
+      meanChannelDistortion: difference.mcd,
+      meanChannelStandardDeviation: difference.mcsd,
+    };
+    return totalDifferences;
+  }
+}
 
 ////////////////////////////////////////////////////////////
 
