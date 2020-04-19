@@ -134,7 +134,7 @@ function SSIM() {
     var totalSize = image1.height * image1.width * channels;
     var totalPixels = image1.height * image1.width;
 
-    var differenceImage = (options.outputFileName && channels === 4) ? new Buffer(totalSize) : null;
+    var differenceImage = (options.outputFileName && channels === 4) ? Buffer.alloc(totalSize) : null;
 
     var absoluteError = [];
     var squareError = [];
@@ -306,10 +306,10 @@ function SSIM() {
    */
   self.compareData = function(imageA, imageB, options, callback) {
     if (typeof imageA === 'string') {
-      imageA = new PNG.sync.read(new Buffer(imageA, 'base64'));
+      imageA = new PNG.sync.read(Buffer.from(imageA, 'base64'));
     }
     if (typeof imageB === 'string') {
-      imageB = new PNG.sync.read(new Buffer(imageB, 'base64'));
+      imageB = new PNG.sync.read(Buffer.from(imageB, 'base64'));
     }
 
     self.calculateChannelDifferences(imageA, imageB, options, function(difference) {
