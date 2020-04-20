@@ -4,7 +4,8 @@
   "description": "Structural Similarity Image Comparison",
   "main": "index.js",
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "eslint": "eslint -c .eslintrc.json . --fix"
   },
   "repository": {
     "type": "git",
@@ -20,6 +21,7 @@
     "pngjs": "^5.0.0"
   },
   "devDependencies": {
+    "eslint": "^6.8.0",
     "jest": "^25.3.0"
   }
 }
